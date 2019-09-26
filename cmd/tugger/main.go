@@ -97,8 +97,14 @@ func mutateAdmissionReviewHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
+	log.Printf("AdmissionReview Pod is: %s", pod.Name)
 	_, isMirrorPod := pod.Annotations[MirrorPodConfigAnnotation]
-	log.Println("pod is mirror pod or not :", isMirrorPod)
+	if isMirrorPod {
+		log.Println("pod is mirror pod:", isMirrorPod)
+	} else {
+		log.Println("pod is not mirror pod.")
+	}
 
 	patches := []patch{}
 	if !contains(whitelistedNamespaces, namespace) && !isMirrorPod{
@@ -219,10 +225,14 @@ func validateAdmissionReviewHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
+	log.Printf("AdmissionReview Pod is: %s", pod.Name)
 	_, isMirrorPod := pod.Annotations[MirrorPodConfigAnnotation]
 	if isMirrorPod {
 		log.Println("pod is mirror pod:", isMirrorPod)
 		admissionResponse.Allowed = true
+	} else {
+		log.Println("pod is not mirror pod.")
 	}
 
 	if !contains(whitelistedNamespaces, namespace) && !isMirrorPod {
