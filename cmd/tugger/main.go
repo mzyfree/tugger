@@ -97,9 +97,11 @@ func mutateAdmissionReviewHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	_, isMirrorPod := pod.Annotations[MirrorPodConfigAnnotation]
+	log.Println("pod is mirror pod or not :", isMirrorPod)
 
 	patches := []patch{}
-	if !contains(whitelistedNamespaces, namespace) {
+	if !contains(whitelistedNamespaces, namespace) && !isMirrorPod{
 		// Handle Containers
 		for _, container := range pod.Spec.Containers {
 			createPatch := handleContainer(&container, dockerRegistryUrl)
@@ -128,9 +130,7 @@ func mutateAdmissionReviewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	admissionResponse.Allowed = true
-	if _, isMirrorPod := pod.Annotations[MirrorPodConfigAnnotation]; isMirrorPod {
-		log.Println("Pod is mirror pod ignore it. ", pod.Name)
-	} else if len(patches) > 0 {
+	if len(patches) > 0 {
 
 		// Add image pull secret patche
 		patches = append(patches, patch{
