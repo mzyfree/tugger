@@ -213,14 +213,19 @@ func validateAdmissionReviewHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("AdmissionReview Namespace is: %s", namespace)
 
 	admissionResponse := v1beta1.AdmissionResponse{Allowed: false}
-	if !contains(whitelistedNamespaces, namespace) {
-		pod := v1.Pod{}
-		if err := json.Unmarshal(ar.Request.Object.Raw, &pod); err != nil {
-			log.Println(err)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
+	pod := v1.Pod{}
+	if err := json.Unmarshal(ar.Request.Object.Raw, &pod); err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	_, isMirrorPod := pod.Annotations[MirrorPodConfigAnnotation]
+	if isMirrorPod {
+		log.Println("pod is mirror pod:", isMirrorPod)
+		admissionResponse.Allowed = true
+	}
 
+	if !contains(whitelistedNamespaces, namespace) && !isMirrorPod {
 		// Handle containers
 		for _, container := range pod.Spec.Containers {
 			log.Println("Container Image is", container.Image)
