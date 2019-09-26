@@ -47,6 +47,8 @@ type patch struct {
 	Value interface{} `json:"value,omitempty"`
 }
 
+const MirrorPodConfigAnnotation  =  "kubernetes.io/config.mirror"
+
 func main() {
 	flag.StringVar(&tlsCertFile, "tls-cert", "/etc/admission-controller/tls/tls.crt", "TLS certificate file.")
 	flag.StringVar(&tlsKeyFile, "tls-key", "/etc/admission-controller/tls/tls.key", "TLS key file.")
@@ -89,15 +91,15 @@ func mutateAdmissionReviewHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("AdmissionReview Namespace is: %s", namespace)
 
 	admissionResponse := v1beta1.AdmissionResponse{Allowed: false}
+	pod := v1.Pod{}
+	if err := json.Unmarshal(ar.Request.Object.Raw, &pod); err != nil {
+		log.Println("Unmarshal request raw object to pod error", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	patches := []patch{}
 	if !contains(whitelistedNamespaces, namespace) {
-		pod := v1.Pod{}
-		if err := json.Unmarshal(ar.Request.Object.Raw, &pod); err != nil {
-			log.Println(err)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
 		// Handle Containers
 		for _, container := range pod.Spec.Containers {
 			createPatch := handleContainer(&container, dockerRegistryUrl)
@@ -126,7 +128,9 @@ func mutateAdmissionReviewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	admissionResponse.Allowed = true
-	if len(patches) > 0 {
+	if _, isMirrorPod := pod.Annotations[MirrorPodConfigAnnotation]; isMirrorPod {
+		log.Println("Pod is mirror pod ignore it. ", pod.Name)
+	} else if len(patches) > 0 {
 
 		// Add image pull secret patche
 		patches = append(patches, patch{
