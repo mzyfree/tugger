@@ -107,32 +107,34 @@ func mutateAdmissionReviewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	patches := []patch{}
-	if !contains(whitelistedNamespaces, namespace) && !isMirrorPod{
-		// Handle Containers
-		for _, container := range pod.Spec.Containers {
-			createPatch := handleContainer(&container, dockerRegistryUrl)
-			if createPatch {
-				patches = append(patches, patch{
-					Op:    "add",
-					Path:  "/spec/containers",
-					Value: []v1.Container{container},
-				})
+	if !isMirrorPod {
+		if !contains(whitelistedNamespaces, namespace){
+			// Handle Containers
+			for _, container := range pod.Spec.Containers {
+				createPatch := handleContainer(&container, dockerRegistryUrl)
+				if createPatch {
+					patches = append(patches, patch{
+						Op:    "add",
+						Path:  "/spec/containers",
+						Value: []v1.Container{container},
+					})
+				}
 			}
-		}
 
-		// Handle init containers
-		for _, container := range pod.Spec.InitContainers {
-			createPatch := handleContainer(&container, dockerRegistryUrl)
-			if createPatch {
-				patches = append(patches, patch{
-					Op:    "add",
-					Path:  "/spec/initContainers",
-					Value: []v1.Container{container},
-				})
+			// Handle init containers
+			for _, container := range pod.Spec.InitContainers {
+				createPatch := handleContainer(&container, dockerRegistryUrl)
+				if createPatch {
+					patches = append(patches, patch{
+						Op:    "add",
+						Path:  "/spec/initContainers",
+						Value: []v1.Container{container},
+					})
+				}
 			}
+		} else {
+			log.Printf("Namespace is %s Whitelisted", namespace)
 		}
-	} else {
-		log.Printf("Namespace is %s Whitelisted", namespace)
 	}
 
 	admissionResponse.Allowed = true
@@ -235,39 +237,41 @@ func validateAdmissionReviewHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("pod is not mirror pod.")
 	}
 
-	if !contains(whitelistedNamespaces, namespace) && !isMirrorPod {
-		// Handle containers
-		for _, container := range pod.Spec.Containers {
-			log.Println("Container Image is", container.Image)
+	if !isMirrorPod {
+		if !contains(whitelistedNamespaces, namespace) {
+			// Handle containers
+			for _, container := range pod.Spec.Containers {
+				log.Println("Container Image is", container.Image)
 
-			if !containsRegisty(whitelistedRegistries, container.Image) {
-				message := fmt.Sprintf("Image is not being pulled from Private Registry: %s", container.Image)
-				log.Printf(message)
-				admissionResponse.Result = getInvalidContainerResponse(message)
-				goto done
-			} else {
-				log.Printf("Image is being pulled from Private Registry: %s", container.Image)
-				admissionResponse.Allowed = true
+				if !containsRegisty(whitelistedRegistries, container.Image) {
+					message := fmt.Sprintf("Image is not being pulled from Private Registry: %s", container.Image)
+					log.Printf(message)
+					admissionResponse.Result = getInvalidContainerResponse(message)
+					goto done
+				} else {
+					log.Printf("Image is being pulled from Private Registry: %s", container.Image)
+					admissionResponse.Allowed = true
+				}
 			}
-		}
 
-		// Handle init containers
-		for _, container := range pod.Spec.InitContainers {
-			log.Println("Init Container Image is", container.Image)
+			// Handle init containers
+			for _, container := range pod.Spec.InitContainers {
+				log.Println("Init Container Image is", container.Image)
 
-			if !containsRegisty(whitelistedRegistries, container.Image) {
-				message := fmt.Sprintf("Image is not being pulled from Private Registry: %s", container.Image)
-				log.Printf(message)
-				admissionResponse.Result = getInvalidContainerResponse(message)
-				goto done
-			} else {
-				log.Printf("Image is being pulled from Private Registry: %s", container.Image)
-				admissionResponse.Allowed = true
+				if !containsRegisty(whitelistedRegistries, container.Image) {
+					message := fmt.Sprintf("Image is not being pulled from Private Registry: %s", container.Image)
+					log.Printf(message)
+					admissionResponse.Result = getInvalidContainerResponse(message)
+					goto done
+				} else {
+					log.Printf("Image is being pulled from Private Registry: %s", container.Image)
+					admissionResponse.Allowed = true
+				}
 			}
+		} else {
+			log.Printf("Namespace is %s Whitelisted", namespace)
+			admissionResponse.Allowed = true
 		}
-	} else {
-		log.Printf("Namespace is %s Whitelisted", namespace)
-		admissionResponse.Allowed = true
 	}
 
 done:
