@@ -107,30 +107,38 @@ func mutateAdmissionReviewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	patches := []patch{}
+	normalContainers := []v1.Container{}
+	initContainers := []v1.Container{}
 	if !isMirrorPod {
 		if !contains(whitelistedNamespaces, namespace){
 			// Handle Containers
 			for _, container := range pod.Spec.Containers {
 				createPatch := handleContainer(&container, dockerRegistryUrl)
 				if createPatch {
-					patches = append(patches, patch{
-						Op:    "add",
-						Path:  "/spec/containers",
-						Value: []v1.Container{container},
-					})
+					normalContainers = append(normalContainers, container)
 				}
+			}
+			if len(normalContainers) > 0 {
+				patches = append(patches, patch{
+					Op:    "add",
+					Path:  "/spec/containers",
+					Value: normalContainers,
+				})
 			}
 
 			// Handle init containers
 			for _, container := range pod.Spec.InitContainers {
 				createPatch := handleContainer(&container, dockerRegistryUrl)
 				if createPatch {
-					patches = append(patches, patch{
-						Op:    "add",
-						Path:  "/spec/initContainers",
-						Value: []v1.Container{container},
-					})
+					initContainers = append(initContainers, container)
 				}
+			}
+			if len(initContainers) > 0 {
+				patches = append(patches, patch{
+					Op:    "add",
+					Path:  "/spec/initContainers",
+					Value: initContainers,
+				})
 			}
 		} else {
 			log.Printf("Namespace is %s Whitelisted", namespace)
